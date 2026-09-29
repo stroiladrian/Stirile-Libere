@@ -64,7 +64,7 @@ function renderHome() {
   const stamp = state.updatedAt ? `Actualizat ${ago(state.updatedAt)}` : '';
   return `<button class="hero" data-open="${esc(hero.id)}" ${bg(hero)}>
       <div class="cap"><span class="chip">${esc(hero.sourceName)}</span>
-      <h2>${esc(hero.title)}</h2><div class="meta">${when(hero.date)}${hero.author ? ' · ' + esc(hero.author) : ''}</div></div></button>
+      <h2 class="${hero.title.length > 110 ? 'long' : ''}">${esc(hero.title)}</h2><div class="meta">${when(hero.date)}${hero.author ? ' · ' + esc(hero.author) : ''}</div></div></button>
     <div class="stamp">${stamp}</div>
     <div class="grid">${rest.slice(0, 60).map((a, i) => card(a, i % 7 === 3)).join('')}</div>`;
 }
@@ -106,7 +106,7 @@ async function openStory(id) {
     <button class="close" data-close aria-label="Închide">×</button>
     <div class="cover" ${bg(a)}><div class="cover-in">
       <span class="chip">#${esc(tag)}</span>
-      <h1>${esc(a.title)}</h1>
+      <h1 class="${a.title.length > 110 ? 'long' : ''}">${esc(a.title)}</h1>
       <div class="by">${esc(a.sourceName)}${a.author ? ' · ' + esc(a.author) : ''} · ${when(a.date)}</div>
     </div></div>
     <div class="sheet">
