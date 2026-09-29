@@ -68,12 +68,12 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Publică pe Pages doar când sunt știri noi, la push sau la rulare manuală
+      # Publică pe Pages doar când sunt știri noi sau când s-a schimbat codul (push)
       - uses: actions/configure-pages@v5
-        if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name != 'schedule')
+        if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'push')
       - uses: actions/upload-pages-artifact@v3
-        if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name != 'schedule')
+        if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'push')
         with:
           path: public
       - uses: actions/deploy-pages@v4
-        if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name != 'schedule')
+        if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'push')
