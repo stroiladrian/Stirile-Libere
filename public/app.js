@@ -162,3 +162,14 @@ async function load() {
 }
 load();
 setInterval(load, 10 * 60 * 1000);
+
+// Tap pe logo: înapoi la Acasă, filtru resetat, sus și reîncarcă știrile
+async function goHome() {
+  closeStory();
+  Object.assign(state, { page: 'home', source: 'all', q: '' });
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  await load();
+}
+$('#brand').addEventListener('click', (e) => { if (!e.target.closest('#refreshBtn')) goHome(); });
+$('#brand').addEventListener('keydown', (e) => { if (e.key === 'Enter') goHome(); });
