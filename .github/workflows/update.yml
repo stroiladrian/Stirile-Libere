@@ -68,10 +68,6 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Versiune pentru cache (evită fișiere vechi pe telefon)
-        if: steps.gate.outputs.run == 'true'
-        run: sed -i "s/__V__/${GITHUB_SHA::8}-$(date +%s)/g" public/index.html
-
       # Publică pe Pages doar când sunt știri noi, la push sau la rulare manuală
       - uses: actions/configure-pages@v5
         if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name != 'schedule')
