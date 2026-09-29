@@ -8,6 +8,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .brand{display:flex;align-items:center;gap:8px;padding:14px 16px 6px;font-family:var(--serif);font-size:22px;position:relative}
 .brand b{color:var(--red)}
 .logo{background:var(--red);color:#fff;font:800 13px var(--sans);padding:5px 6px;border-radius:5px;letter-spacing:.5px}
+.logo-mark{display:block;flex:none;width:30px;height:30px;border-radius:7px}
 .icon-btn{margin-left:auto;font-size:30px;line-height:1;color:var(--muted);padding:4px 8px}
 .icon-btn.spin{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
