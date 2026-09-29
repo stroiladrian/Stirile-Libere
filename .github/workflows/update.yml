@@ -1,0 +1,79 @@
+name: Actualizare stiri + publicare
+
+on:
+  schedule:
+    # Ora României = UTC+3 (vara) / UTC+2 (iarna). Rulăm la ambele variante UTC,
+    # iar pasul "Ora potrivită?" lasă să treacă doar orele dorite (ora locală).
+    - cron: '5 4,5,6,7,8,9,11,12,13,14,16,17,19,20 * * *'
+  workflow_dispatch:        # buton manual în GitHub → Actions
+  push:
+    branches: [main]        # publică și la fiecare modificare de cod
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ora potrivită?
+        id: gate
+        run: |
+          H=$(TZ=Europe/Bucharest date +%H)
+          echo "Ora în România: $H"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            case "$H" in
+              07|09|11|14|16|19|22) echo "run=true" >> "$GITHUB_OUTPUT" ;;
+              *) echo "run=false" >> "$GITHUB_OUTPUT" ;;
+            esac
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalare
+        if: steps.gate.outputs.run == 'true'
+        run: npm ci
+
+      - name: Descarcă știrile
+        if: steps.gate.outputs.run == 'true'
+        run: node server.js --fetch-only
+
+      - name: Salvează doar dacă e ceva nou
+        id: commit
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          if [ -n "$(git status --porcelain public/data)" ]; then
+            git config user.name "stirile-libere-bot"
+            git config user.email "bot@users.noreply.github.com"
+            git add public/data
+            git commit -m "Știri noi $(TZ=Europe/Bucharest date '+%Y-%m-%d %H:%M')"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Nimic nou — nu se publică nimic."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Publică pe Pages doar când sunt știri noi, la push sau la rulare manuală
+      - uses: actions/configure-pages@v5
+        if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name != 'schedule')
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name != 'schedule')
+        with:
+          path: public
+      - uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name != 'schedule')
