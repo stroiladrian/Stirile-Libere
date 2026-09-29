@@ -1,5 +1,6 @@
 const $ = (s) => document.querySelector(s);
-const state = { articles: [], sources: [], updatedAt: null, source: 'all', page: 'home', q: '' };
+const PAGE = 40;
+const state = { articles: [], sources: [], updatedAt: null, source: 'all', page: 'home', q: '', limit: PAGE };
 
 
 const esc = (s = '') => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -74,7 +75,7 @@ function renderHome() {
       <div class="cap"><span class="chip">${esc(hero.sourceName)}</span>
       <h2>${esc(hero.title)}</h2><div class="meta">${when(hero.date)}${hero.author ? ' · ' + esc(hero.author) : ''}</div></div></button>
     <div class="stamp">${stamp}</div>
-    <div class="grid">${rest.slice(0, 60).map((a, i) => card(a, i % 7 === 3)).join('')}</div>`;
+    <div class="grid">${rest.slice(0, state.limit).map((a, i) => card(a, i % 7 === 3)).join('')}</div>${rest.length > state.limit ? '<button class="more" data-more>Încarcă mai multe</button>' : ''}`;
 }
 
 function renderExplore() {
@@ -82,7 +83,7 @@ function renderExplore() {
   let body;
   if (q) {
     const res = state.articles.filter((a) => (a.title + ' ' + a.summary).toLowerCase().includes(q));
-    body = res.length ? `<div class="grid">${res.slice(0, 60).map((a) => card(a)).join('')}</div>` : `<div class="empty">Niciun rezultat pentru „${esc(state.q)}”.</div>`;
+    body = res.length ? `<div class="grid">${res.slice(0, state.limit).map((a) => card(a)).join('')}</div>${res.length > state.limit ? '<button class="more" data-more>Încarcă mai multe</button>' : ''}` : `<div class="empty">Niciun rezultat pentru „${esc(state.q)}”.</div>`;
   } else {
     body = `<div class="tiles">${state.sources.map((s) => {
       const items = state.articles.filter((a) => a.source === s.id);
@@ -101,8 +102,11 @@ function render(keepFocus) {
   if (keepFocus) { const i = $('#q'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
 }
 
-let contentP;
-const getContent = () => (contentP ||= fetch('data/content.json').then((r) => r.json()).catch(() => { contentP = null; return {}; }));
+const contentCache = {};
+const getContent = (iso) => {
+  const day = iso.slice(0, 10);
+  return (contentCache[day] ||= fetch(`data/content/${day}.json`).then((r) => (r.ok ? r.json() : {})).catch(() => { delete contentCache[day]; return {}; }));
+};
 
 async function openStory(id) {
   const a = byId(id); if (!a) return;
@@ -125,7 +129,7 @@ async function openStory(id) {
       <div class="credit">Sursa: <a href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.sourceName)}</a></div>
     </div></div>`;
   try {
-    const d = await getContent();
+    const d = await getContent(a.date);
     const html = d[id];
     if ($('#prose') && html) {
       $('#prose').innerHTML = html;
@@ -138,12 +142,13 @@ async function openStory(id) {
 const closeStory = () => { $('#reader').hidden = true; document.body.style.overflow = ''; };
 
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('[data-open],[data-src],[data-page],[data-close],[data-share],[data-explore],#refreshBtn');
+  const t = e.target.closest('[data-open],[data-src],[data-page],[data-close],[data-share],[data-more],[data-explore],#refreshBtn');
   if (!t) return;
-  if (t.dataset.open) openStory(t.dataset.open);
-  else if (t.dataset.src) { state.source = t.dataset.src; render(); window.scrollTo(0, 0); }
-  else if (t.dataset.page) { state.page = t.dataset.page; render(); window.scrollTo(0, 0); }
-  else if (t.dataset.explore) { state.source = t.dataset.explore; state.page = 'home'; render(); window.scrollTo(0, 0); }
+  if ('more' in t.dataset) { state.limit += PAGE; const y = window.scrollY; render(); window.scrollTo(0, y); }
+  else if (t.dataset.open) openStory(t.dataset.open);
+  else if (t.dataset.src) { state.source = t.dataset.src; state.limit = PAGE; render(); window.scrollTo(0, 0); }
+  else if (t.dataset.page) { state.page = t.dataset.page; state.limit = PAGE; render(); window.scrollTo(0, 0); }
+  else if (t.dataset.explore) { state.source = t.dataset.explore; state.page = 'home'; state.limit = PAGE; render(); window.scrollTo(0, 0); }
   else if ('close' in t.dataset) closeStory();
   else if (t.dataset.share) {
     const a = byId(t.dataset.share);
@@ -151,13 +156,13 @@ document.addEventListener('click', async (e) => {
     else navigator.clipboard?.writeText(a.link).then(() => { t.style.opacity = .5; setTimeout(() => (t.style.opacity = ''), 600); });
   } else if (t.id === 'refreshBtn') {
     t.classList.add('spin');
-    contentP = null;
+    Object.keys(contentCache).forEach((k) => delete contentCache[k]);
     await fetch('api/refresh', { method: 'POST' }).catch(() => {});
     await load();
     t.classList.remove('spin');
   }
 });
-document.addEventListener('input', (e) => { if (e.target.id === 'q') { state.q = e.target.value; render(true); } });
+document.addEventListener('input', (e) => { if (e.target.id === 'q') { state.q = e.target.value; state.limit = PAGE; render(true); } });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeStory(); });
 
 async function load() {

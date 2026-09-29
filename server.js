@@ -9,7 +9,11 @@ const SOURCES = require('./sources');
 const PORT = process.env.PORT || 4321;
 const DATA_DIR = path.join(__dirname, 'public', 'data');
 const LIST_FILE = path.join(DATA_DIR, 'articles.json');
-const CONTENT_FILE = path.join(DATA_DIR, 'content.json');
+const CONTENT_FILE = path.join(DATA_DIR, 'content.json'); // vechi, doar pentru migrare
+const CONTENT_DIR = path.join(DATA_DIR, 'content');        // un fisier pe zi: content/AAAA-LL-ZZ.json
+const KEEP_DAYS = 14;
+const MAX_ARTICLES = 1000;
+const MIN_PER_SOURCE = 10;
 const MAX_PER_SOURCE = 40;
 const UA = 'Mozilla/5.0 (compatible; StirileLibere/1.0; +rss-reader)';
 const GENERIC_CATS = ['necategorizat', 'uncategorized', 'fara categorie'];
@@ -158,6 +162,11 @@ function loadCache() {
     const list = JSON.parse(fs.readFileSync(LIST_FILE, 'utf8'));
     let content = {};
     try { content = JSON.parse(fs.readFileSync(CONTENT_FILE, 'utf8')); } catch {}
+    try {
+      for (const f of fs.readdirSync(CONTENT_DIR)) {
+        try { Object.assign(content, JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, f), 'utf8'))); } catch {}
+      }
+    } catch {}
     list.articles.forEach((a) => { a.content = content[a.id] || ''; });
     return list;
   } catch { return { updatedAt: null, articles: [], status: {} }; }
@@ -181,9 +190,12 @@ async function refresh() {
     } catch (e) {
       status[src.id] = { ok: false, error: e.message };
       console.warn(`  ! ${src.name}: ${e.message}`);
-      all = all.concat(old.articles.filter((a) => a.source === src.id)); // pastreaza vechile
     }
   }));
+
+  // istoric: pastreaza articolele vechi (de la orice sursa); cele proaspete le inlocuiesc pe cele cu acelasi id
+  const freshIds = new Set(all.map((a) => a.id));
+  all = all.concat(old.articles.filter((a) => !freshIds.has(a.id)));
 
   // reutilizeaza imaginile deja gasite; og:image pentru cele fara imagine
   const missing = [];
@@ -218,25 +230,34 @@ async function refresh() {
   const seen = new Set();
   const articles = all
     .filter((a) => (seen.has(a.id) ? false : seen.add(a.id)))
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, 600);
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  // scrie doar daca a aparut ceva nou (articole noi sau modificate)
+  // taie ce e mai vechi de KEEP_DAYS, apoi scrie doar daca s-a schimbat ceva
+  const cutoff = Date.now() - KEEP_DAYS * 864e5;
+  // pastreaza ce e mai nou de KEEP_DAYS + minim MIN_PER_SOURCE de la fiecare sursa (ca sursele rare sa nu dispara)
+  const perSource = {};
+  const kept = articles.filter((a) => {
+    perSource[a.source] = (perSource[a.source] || 0) + 1;
+    return new Date(a.date).getTime() >= cutoff || perSource[a.source] <= MIN_PER_SOURCE;
+  }).slice(0, MAX_ARTICLES);
   const strip = (list) => JSON.stringify(list.map(({ content, ...a }) => a));
-  const changed = strip(articles) !== strip(old.articles);
+  const changed = strip(kept) !== strip(old.articles) || fs.existsSync(CONTENT_FILE); // content.json vechi => migreaza la fisiere pe zile
   if (!changed) {
     console.log('  nimic nou, nu se scrie nimic');
   } else {
-    const content = {};
-    articles.forEach((a) => { if (a.content) content[a.id] = a.content; });
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+    // continutul, pe zile (sub 1 MB fiecare), ca telefonul sa descarce doar ce deschide
+    const shards = {};
+    kept.forEach((a) => { if (a.content) (shards[a.date.slice(0, 10)] ||= {})[a.id] = a.content; });
+    fs.mkdirSync(CONTENT_DIR, { recursive: true });
+    for (const [day, obj] of Object.entries(shards)) fs.writeFileSync(path.join(CONTENT_DIR, `${day}.json`), JSON.stringify(obj));
+    for (const f of fs.readdirSync(CONTENT_DIR)) if (!shards[f.replace('.json', '')]) fs.unlinkSync(path.join(CONTENT_DIR, f));
+    try { fs.unlinkSync(CONTENT_FILE); } catch {}
     fs.writeFileSync(LIST_FILE, JSON.stringify({
       updatedAt: new Date().toISOString(),
       sources: SOURCES.map((x) => ({ id: x.id, name: x.name, url: x.url })),
-      articles: articles.map(({ content, ...a }) => a),
+      articles: kept.map(({ content, ...a }) => a),
     }));
-    fs.writeFileSync(CONTENT_FILE, JSON.stringify(content));
-    console.log(`  gata: ${articles.length} articole (actualizat)`);
+    console.log(`  gata: ${kept.length} articole (actualizat)`);
   }
   refreshing = false;
 }
