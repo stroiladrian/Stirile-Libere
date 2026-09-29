@@ -43,16 +43,24 @@ function renderTabs() {
   $('#tabs').style.display = state.page === 'home' ? '' : 'none';
 }
 
-// Cele mai noi zile primele; în fiecare zi, câte o știre din fiecare sursă pe rând
+// Ordine strict după dată, de la cea mai nouă la cea mai veche, toate sursele împreună.
+// Ca să nu apară blocuri de aceeași sursă, o știre poate ceda locul uneia de la altă sursă
+// doar dacă diferența de timp dintre ele e mică (sub 45 de minute).
+const MIX_WINDOW_MS = 45 * 60 * 1000;
 function mixFeed(articles) {
-  const days = {};
-  articles.forEach((a) => (days[dayKey(a.date)] ||= []).push(a));
+  const rest = [...articles].sort((x, y) => new Date(y.date) - new Date(x.date));
   const out = [];
-  for (const k of Object.keys(days).sort().reverse()) {
-    const q = {};
-    days[k].sort((x, y) => new Date(y.date) - new Date(x.date)).forEach((a) => (q[a.source] ||= []).push(a));
-    const ids = Object.keys(q).sort((x, y) => new Date(q[y][0].date) - new Date(q[x][0].date));
-    while (ids.some((id) => q[id].length)) for (const id of ids) if (q[id].length) out.push(q[id].shift());
+  while (rest.length) {
+    let pick = 0;
+    const last = out[out.length - 1];
+    if (last && rest[0].source === last.source) {
+      const t0 = new Date(rest[0].date).getTime();
+      for (let i = 1; i < Math.min(rest.length, 8); i++) {
+        if (t0 - new Date(rest[i].date).getTime() > MIX_WINDOW_MS) break;
+        if (rest[i].source !== last.source) { pick = i; break; }
+      }
+    }
+    out.push(rest.splice(pick, 1)[0]);
   }
   return out;
 }
