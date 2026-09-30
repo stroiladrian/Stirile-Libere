@@ -68,12 +68,13 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Publică pe Pages doar când sunt știri noi sau când s-a schimbat codul (push)
+      # Publică pe Pages la fiecare rulare (e doar o copie statică, gratuită). Astfel, dacă o publicare eșuează
+      # (ex. eroare trecătoare GitHub), următoarea rulare o reia, chiar dacă nu sunt știri noi.
       - uses: actions/configure-pages@v5
-        if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'push')
+        if: steps.gate.outputs.run == 'true'
       - uses: actions/upload-pages-artifact@v3
-        if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'push')
+        if: steps.gate.outputs.run == 'true'
         with:
           path: public
       - uses: actions/deploy-pages@v4
-        if: steps.gate.outputs.run == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'push')
+        if: steps.gate.outputs.run == 'true'
