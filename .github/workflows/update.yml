@@ -21,6 +21,8 @@ concurrency:
 jobs:
   update-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}   # opțional: topicul ntfy pentru notificări pe telefon
     steps:
       - uses: actions/checkout@v4
 
@@ -78,3 +80,9 @@ jobs:
           path: public
       - uses: actions/deploy-pages@v4
         if: steps.gate.outputs.run == 'true'
+
+      # Notificare pe telefon (ntfy.sh, gratuit), doar când au apărut știri noi și după publicare
+      - name: Notificare pe telefon
+        if: steps.gate.outputs.run == 'true' && steps.commit.outputs.changed == 'true' && env.NTFY_TOPIC != ''
+        continue-on-error: true
+        run: node scripts/notify.js

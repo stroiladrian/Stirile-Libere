@@ -258,6 +258,12 @@ async function refresh() {
       articles: kept.map(({ content, ...a }) => a),
     }));
     console.log(`  gata: ${kept.length} articole (actualizat)`);
+    // lista articolelor noi, pentru notificarea pe telefon (fisier local, nu se comite)
+    const fresh = kept.filter((x) => !oldById.has(x.id));
+    if (old.articles.length && fresh.length) {
+      fs.writeFileSync(path.join(__dirname, '.new-articles.json'),
+        JSON.stringify(fresh.map((x) => ({ title: x.title, source: x.sourceName, date: x.date }))));
+    }
   }
   refreshing = false;
 }
