@@ -1,0 +1,8 @@
+{
+  "order": 2,
+  "name": "Recorder",
+  "url": "https://recorder.ro/stirile-recorder/",
+  "feed": "https://recorder.ro/stirile-recorder/feed/",
+  "color": "#E5484D",
+  "extract": false
+}

@@ -9,7 +9,7 @@ npm start        # http://localhost:4321 (alt port: PORT=5000 npm start)
 ```
 - Prima pornire descarcă știrile automat; apoi se actualizează zilnic la 07:00 și 13:00 (ora României) cât timp serverul rulează.
 - Buton ⟳ din aplicație = actualizare manuală. `npm run fetch` = doar descărcare.
-- Adaugi o sursă nouă în `sources.js` (URL-ul feed-ului RSS).
+- Sursele stau în folderul `feeds/` (un fișier `.json` pe sursă). Vezi „Surse” mai jos.
 - Salvatele se țin în browser (localStorage).
 
 ## Pe telefon
@@ -20,3 +20,19 @@ Pune folderul pe un server (Render, Railway, Fly.io, VPS) și deschide adresa pe
 2. Settings → Pages → Source: **GitHub Actions**.
 3. Gata: `.github/workflows/update.yml` descarcă știrile la 07, 09, 11, 14, 16, 19 și 22 (ora României) și publică site-ul **doar dacă a apărut ceva nou**. Rulare manuală: tab-ul Actions → „Actualizare stiri + publicare” → Run workflow.
 Datele stau în `public/data/` (se commit-uiesc automat).
+
+## Surse (adaugă / editează / șterge)
+- În aplicație: **Explorează → „+ Adaugă sursă”**. Scrii numele și adresa site-ului (sau a feed-ului RSS), alegi o culoare, apeși **Continuă pe GitHub** → **Commit changes**. După 1–3 minute sursa apare în aplicație.
+- Feed-ul se găsește singur din adresa site-ului (RSS sau Atom). Dacă nu se găsește, sursa apare în listă cu „Nu am găsit feed-ul – verifică adresa”.
+- Pentru sursele noi, dacă feed-ul are doar un rezumat, articolul complet se descarcă de pe site.
+- Editarea și ștergerea: din aceeași listă (linkurile duc la fișierul de pe GitHub).
+- Format fișier `feeds/<id>.json`: `{ "name": "...", "url": "https://...", "color": "#RRGGBB" }` (opțional: `feed`, `order`, `extract: false`, `body`, `skip`, `fallbackFeed`).
+
+## Revenire la versiunea stabilă (dinainte de surse)
+Versiunea dinainte de această schimbare are tag-ul `stable-v1`. Pentru revenire (păstrează știrile descărcate):
+```
+git checkout stable-v1 -- server.js sources.js public/app.js public/index.html public/style.css README.md
+git rm -r -q feeds
+git commit -m "Revenire la stable-v1"
+git push
+```

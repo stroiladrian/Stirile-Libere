@@ -1,0 +1,10 @@
+{
+  "order": 6,
+  "name": "PressOne",
+  "url": "https://pressone.ro/",
+  "feed": "https://pressone.ro/api/rss",
+  "fallbackFeed": "https://pressone.ro/feed/",
+  "body": "article .featured-content",
+  "skip": ".d-flex, .card, .nl-card, .pswp-gallery, .text-center",
+  "color": "#12A594"
+}

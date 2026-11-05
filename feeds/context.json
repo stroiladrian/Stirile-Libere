@@ -1,0 +1,8 @@
+{
+  "order": 4,
+  "name": "Context",
+  "url": "https://context.ro/",
+  "feed": "https://context.ro/feed/",
+  "body": ".contentme",
+  "color": "#30A46C"
+}

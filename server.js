@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { XMLParser } = require('fast-xml-parser');
 const cheerio = require('cheerio');
-const SOURCES = require('./sources');
+const loadSources = require('./sources'); // citeste feeds/*.json
 
 const PORT = process.env.PORT || 4321;
 const DATA_DIR = path.join(__dirname, 'public', 'data');
@@ -22,7 +22,8 @@ const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   cdataPropName: false,
-  processEntities: true,
+  // limitele implicite (1000 entitati) blocheaza feed-urile cu mult HTML escapat (ex. Atom de la GitHub)
+  processEntities: { enabled: true, maxTotalExpansions: 1e7, maxExpandedLength: 5e7 },
   trimValues: true,
 });
 
@@ -77,14 +78,21 @@ function sanitize(html, base) {
   return root.html().replace(/\n{2,}/g, '\n').trim();
 }
 
+// selectori incercati pe rand pentru sursele noi, care nu au "body" setat
+const GENERIC_BODY = ['[itemprop="articleBody"]', '.entry-content', '.post-content', '.article-content', '.article-body', '.article__body', '.td-post-content', '.single-content', 'article .content', 'article', 'main'];
+
 async function pageBody(url, sel, skip) {
   try {
     const html = await fetchText(url, 15000);
     const $ = cheerio.load(html);
-    const box = $(sel);
-    if (!box.length) return '';
-    const parts = box.find('p,h2,h3,h4,blockquote,ul,ol,figure').addBack('p,h2,h3,h4,blockquote,ul,ol,figure').filter((_, el) => (!$(el).parents('blockquote,figure,ul,ol').length || el.tagName === 'figure') && !(skip && $(el).closest(skip).length)).map((_, el) => $.html(el)).get();
-    return sanitize(parts.join('\n'), url);
+    for (const s of sel ? [sel] : GENERIC_BODY) {
+      const box = $(s).first();
+      if (!box.length) continue;
+      const parts = box.find('p,h2,h3,h4,blockquote,ul,ol,figure').addBack('p,h2,h3,h4,blockquote,ul,ol,figure').filter((_, el) => (!$(el).parents('blockquote,figure,ul,ol').length || el.tagName === 'figure') && !(skip && $(el).closest(skip).length)).map((_, el) => $.html(el)).get();
+      const out = sanitize(parts.join('\n'), url);
+      if (sel || cheerio.load(out).text().trim().length >= 400) return out;
+    }
+    return '';
   } catch { return ''; }
 }
 
@@ -137,16 +145,69 @@ async function fetchText(url, timeout = 20000) {
   return res.text();
 }
 
-async function fetchSource(src) {
-  let xml;
-  try { xml = await fetchText(src.feed); }
-  catch (e) {
-    if (!src.fallbackFeed) throw e;
-    xml = await fetchText(src.fallbackFeed);
+// Atom (<feed><entry>) → aceeasi forma ca un <item> RSS, ca sa treaca prin normalize()
+function fromAtom(e) {
+  const links = arr(e.link);
+  const alt = links.find((l) => !l['@_rel'] || l['@_rel'] === 'alternate') || links[0];
+  const group = e['media:group'] || {};
+  return {
+    title: e.title,
+    link: (alt && (alt['@_href'] || text(alt))) || '',
+    guid: text(e.id),
+    description: e.summary || group['media:description'],
+    'content:encoded': e.content,
+    pubDate: text(e.published) || text(e.updated),
+    'dc:creator': arr(e.author).map((a) => text(a && typeof a === 'object' && 'name' in a ? a.name : a)).filter(Boolean).join(', '),
+    category: arr(e.category).map((c) => (c && c['@_term']) || text(c)),
+    'media:thumbnail': e['media:thumbnail'] || group['media:thumbnail'],
+    'media:content': e['media:content'] || group['media:content'],
+    enclosure: links.filter((l) => l['@_rel'] === 'enclosure').map((l) => ({ '@_url': l['@_href'], '@_type': l['@_type'] || '' })),
+  };
+}
+
+// RSS 2.0, Atom sau RSS 1.0 (RDF) → lista de item-uri; null daca textul nu e un feed
+function parseItems(xml) {
+  if (!/<(rss|feed|rdf:RDF)[\s>]/i.test(String(xml).slice(0, 5000))) return null;
+  let doc;
+  try { doc = parser.parse(xml); } catch { return null; }
+  if (doc.rss) return arr(arr(doc.rss.channel)[0]?.item);
+  if (doc.feed) return arr(doc.feed.entry).map(fromAtom);
+  if (doc['rdf:RDF']) return arr(doc['rdf:RDF'].item);
+  return null;
+}
+
+const FEED_PATHS = ['/feed/', '/rss', '/rss.xml', '/feed.xml', '/atom.xml', '/index.xml'];
+
+// Gaseste feed-ul: feed-ul stiut, cel din fisier, apoi detectie automata din pagina site-ului
+// (<link rel="alternate" type="application/rss+xml">) si, la final, adresele uzuale (/feed/, /rss ...).
+async function fetchSource(src, known) {
+  const tried = new Set();
+  let lastErr = null, page = null;
+  const attempt = async (u) => {
+    if (!u || tried.has(u)) return null;
+    tried.add(u);
+    try {
+      const body = await fetchText(u);
+      const items = parseItems(body);
+      if (items) return { items, feedUrl: u };
+      if (!page) page = { url: u, html: body };
+    } catch (e) { lastErr = e; }
+    return null;
+  };
+  let hit = null;
+  for (const u of [known, src.feed, src.fallbackFeed, src.url]) if (!hit) hit = await attempt(u);
+  if (!hit && page) {
+    const $ = cheerio.load(page.html);
+    const found = $('link[rel~="alternate"]').filter((_, el) => /rss|atom|xml/i.test($(el).attr('type') || '')).map((_, el) => $(el).attr('href')).get();
+    for (const h of found) { if (hit) break; try { hit = await attempt(new URL(h, page.url).toString()); } catch {} }
   }
-  const doc = parser.parse(xml);
-  const items = arr(doc?.rss?.channel?.item);
-  return items.slice(0, MAX_PER_SOURCE).map((i) => normalize(i, src)).filter(Boolean);
+  if (!hit) {
+    let origin = null;
+    try { origin = new URL(src.url).origin; } catch {}
+    for (const p of FEED_PATHS) if (!hit && origin) hit = await attempt(origin + p);
+  }
+  if (!hit) throw lastErr && !page ? lastErr : new Error('nu am gasit un feed RSS/Atom');
+  return { feedUrl: hit.feedUrl, list: hit.items.slice(0, MAX_PER_SOURCE).map((i) => normalize(i, src)).filter(Boolean) };
 }
 
 async function ogImage(url) {
@@ -177,25 +238,33 @@ async function refresh() {
   if (refreshing) return;
   refreshing = true;
   console.log(`[${new Date().toISOString()}] Actualizare stiri...`);
+  const SOURCES = loadSources();
+  const srcById = Object.fromEntries(SOURCES.map((x) => [x.id, x]));
   const old = loadCache();
   const oldById = new Map(old.articles.map((a) => [a.id, a]));
+  const oldSrc = Object.fromEntries((old.sources || []).map((x) => [x.id, x]));
   const status = {};
   let all = [];
 
   await Promise.all(SOURCES.map(async (src) => {
+    // feed-ul gasit data trecuta (detectie automata), refolosit cat timp adresa sursei nu s-a schimbat
+    const prev = oldSrc[src.id];
+    const known = prev && prev.url === src.url ? prev.feedUrl : null;
     try {
-      const list = await fetchSource(src);
-      status[src.id] = { ok: true, count: list.length };
+      const { list, feedUrl } = await fetchSource(src, known);
+      status[src.id] = { ok: true, feedUrl };
       all = all.concat(list);
     } catch (e) {
-      status[src.id] = { ok: false, error: e.message };
+      status[src.id] = { ok: false, feedUrl: known || null };
       console.warn(`  ! ${src.name}: ${e.message}`);
     }
   }));
 
-  // istoric: pastreaza articolele vechi (de la orice sursa); cele proaspete le inlocuiesc pe cele cu acelasi id
+  // istoric: pastreaza articolele vechi ale surselor care exista inca; cele proaspete le inlocuiesc pe cele cu acelasi id
+  // (o sursa stearsa din feeds/ dispare cu tot cu articolele ei)
   const freshIds = new Set(all.map((a) => a.id));
-  all = all.concat(old.articles.filter((a) => !freshIds.has(a.id)));
+  all = all.concat(old.articles.filter((a) => !freshIds.has(a.id) && srcById[a.source]));
+  all.forEach((a) => { a.sourceName = srcById[a.source].name; }); // nume actualizat daca sursa a fost redenumita
 
   // reutilizeaza imaginile deja gasite; og:image pentru cele fara imagine
   const missing = [];
@@ -212,18 +281,22 @@ async function refresh() {
     }));
   }
 
-  // corp complet pentru articolele fara continut in RSS (Context, PressOne)
-  const srcById = Object.fromEntries(SOURCES.map((x) => [x.id, x]));
+  // corp complet pentru articolele fara continut in feed: Context/PressOne cu selectorul lor,
+  // sursele noi cu selectori generici (incercat o singura data pe articol)
   const needBody = [];
   for (const a of all) {
     const prev = oldById.get(a.id);
-    if ((!a.content || a.content.length < 400) && prev && prev.content && prev.content.length >= 400) a.content = prev.content;
-    else if ((!a.content || a.content.length < 400) && srcById[a.source].body) needBody.push(a);
+    const short = !a.content || a.content.length < 400;
+    if (prev && prev.bodyTried) a.bodyTried = true;
+    if (short && prev && prev.content && prev.content.length >= 400) a.content = prev.content;
+    else if (short && (srcById[a.source].body || (srcById[a.source].extract && !a.bodyTried))) needBody.push(a);
   }
   for (let i = 0; i < needBody.length; i += 5) {
     await Promise.all(needBody.slice(i, i + 5).map(async (a) => {
-      const b = await pageBody(a.link, srcById[a.source].body, srcById[a.source].skip);
+      const src = srcById[a.source];
+      const b = await pageBody(a.link, src.body, src.skip);
       if (b) a.content = b;
+      if (!src.body) a.bodyTried = true;
     }));
   }
 
@@ -241,7 +314,8 @@ async function refresh() {
     return new Date(a.date).getTime() >= cutoff || perSource[a.source] <= MIN_PER_SOURCE;
   }).slice(0, MAX_ARTICLES);
   const strip = (list) => JSON.stringify(list.map(({ content, ...a }) => a));
-  const changed = strip(kept) !== strip(old.articles) || fs.existsSync(CONTENT_FILE); // content.json vechi => migreaza la fisiere pe zile
+  const sourcesOut = SOURCES.map((x) => ({ id: x.id, name: x.name, url: x.url, color: x.color, ok: status[x.id].ok, feedUrl: status[x.id].feedUrl }));
+  const changed = strip(kept) !== strip(old.articles) || JSON.stringify(sourcesOut) !== JSON.stringify(old.sources || []) || fs.existsSync(CONTENT_FILE); // content.json vechi => migreaza la fisiere pe zile
   if (!changed) {
     console.log('  nimic nou, nu se scrie nimic');
   } else {
@@ -254,12 +328,13 @@ async function refresh() {
     try { fs.unlinkSync(CONTENT_FILE); } catch {}
     fs.writeFileSync(LIST_FILE, JSON.stringify({
       updatedAt: new Date().toISOString(),
-      sources: SOURCES.map((x) => ({ id: x.id, name: x.name, url: x.url })),
+      sources: sourcesOut,
       articles: kept.map(({ content, ...a }) => a),
     }));
     console.log(`  gata: ${kept.length} articole (actualizat)`);
     // lista articolelor noi, pentru notificarea pe telefon (fisier local, nu se comite)
-    const fresh = kept.filter((x) => !oldById.has(x.id));
+    // (fara articolele unei surse abia adaugate, ca sa nu vina o notificare cu 40 de stiri „noi”)
+    const fresh = kept.filter((x) => !oldById.has(x.id) && (!old.sources || oldSrc[x.source]));
     if (old.articles.length && fresh.length) {
       fs.writeFileSync(path.join(__dirname, '.new-articles.json'),
         JSON.stringify(fresh.map((x) => ({ title: x.title, source: x.sourceName, date: x.date }))));

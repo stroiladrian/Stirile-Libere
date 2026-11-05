@@ -1,0 +1,8 @@
+{
+  "order": 5,
+  "name": "RISE Project",
+  "url": "https://www.riseproject.ro/",
+  "feed": "https://www.riseproject.ro/feed/",
+  "color": "#A06BFF",
+  "extract": false
+}

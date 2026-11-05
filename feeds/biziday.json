@@ -1,0 +1,8 @@
+{
+  "order": 1,
+  "name": "Biziday",
+  "url": "https://www.biziday.ro/",
+  "feed": "https://www.biziday.ro/feed/",
+  "color": "#F5A524",
+  "extract": false
+}
