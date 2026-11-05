@@ -95,11 +95,11 @@ function renderExplore() {
     const res = state.articles.filter((a) => (a.title + ' ' + a.summary).toLowerCase().includes(q));
     body = res.length ? `<div class="grid">${res.slice(0, state.limit).map((a) => card(a)).join('')}</div>${res.length > state.limit ? '<button class="more" data-more>Încarcă mai multe</button>' : ''}` : `<div class="empty">Niciun rezultat pentru „${esc(state.q)}”.</div>`;
   } else {
-    body = `<div class="tiles">${state.sources.map((s) => {
+    body = `<div class="tiles"><button class="tile add" data-sources><span class="plus">+</span><span>Adaugă sursă<small>${unlocked() ? 'RSS sau adresa unui site' : '🔒 Protejat cu parolă'}</small></span></button>${state.sources.map((s) => {
       const items = state.articles.filter((a) => a.source === s.id);
       const cover = items.find((a) => a.image);
       return `<button class="tile" data-explore="${s.id}" ${cover ? bg(cover) : ''}><span>${esc(s.name)}<small>${items.length} articole</small></span></button>`;
-    }).join('')}<button class="tile add" data-sources><span class="plus">+</span><span>Adaugă sursă<small>RSS sau adresa unui site</small></span></button></div>`;
+    }).join('')}</div>`;
   }
   return `<div class="search"><span>🔍</span><input id="q" type="search" placeholder="Caută în știri" value="${esc(state.q)}"></div>${body}`;
 }
@@ -158,6 +158,25 @@ const store = {
 };
 let pickColor = null;
 
+// Parolă pentru „Surse”: în cod e doar amprenta SHA-256 a parolei, nu parola. Deblocarea se ține minte pe acest dispozitiv.
+const PASS_HASH = '5111ab2b2a07c63f9161f4b363e82ab848d5b5e9f6d87c080f14ee64943af726';
+const unlocked = () => { try { return localStorage.getItem('sl-unlock') === PASS_HASH; } catch { return false; } };
+async function sha256(t) {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+  return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+function renderLock(err) {
+  $('#sources').innerHTML = `<div class="panel" role="dialog" aria-label="Surse">
+    <div class="ph"><h2>Surse</h2><button class="x" data-close-sources aria-label="Închide">×</button></div>
+    <form id="lockForm" autocomplete="off">
+      <label>Parola<input name="pass" type="password" required autocomplete="current-password" placeholder="Introdu parola"></label>
+      ${err ? '<p class="err">Parolă greșită.</p>' : ''}
+      <button type="submit" class="primary">Deblochează</button>
+      <p class="hint">Adăugarea, editarea și ștergerea surselor sunt disponibile doar cu parolă.</p>
+    </form></div>`;
+  setTimeout(() => $('#lockForm [name=pass]')?.focus(), 50);
+}
+
 function renderSources() {
   const known = new Set(state.sources.map((s) => s.id));
   const pending = store.get().filter((p) => !known.has(p.id) && Date.now() - p.at < 864e5);
@@ -183,14 +202,23 @@ function renderSources() {
     <h3>Sursele tale</h3>
     <ul class="srcs">${rows}</ul>
     <p class="hint">Editarea și ștergerea se fac tot pe GitHub (Commit changes). O sursă ștearsă dispare cu tot cu știrile ei.</p>
+    <button class="lock" data-lock>🔒 Blochează pe acest dispozitiv</button>
   </div>`;
 }
-function openSources() { renderSources(); $('#sources').hidden = false; document.body.style.overflow = 'hidden'; }
+function openSources() { unlocked() ? renderSources() : renderLock(); $('#sources').hidden = false; document.body.style.overflow = 'hidden'; }
 const closeSources = () => { $('#sources').hidden = true; document.body.style.overflow = ''; };
 
-document.addEventListener('submit', (e) => {
+document.addEventListener('submit', async (e) => {
+  if (e.target.id === 'lockForm') {
+    e.preventDefault();
+    const ok = (await sha256(e.target.elements.pass.value)) === PASS_HASH;
+    if (ok) { try { localStorage.setItem('sl-unlock', PASS_HASH); } catch {} renderSources(); render(); }
+    else renderLock(true);
+    return;
+  }
   if (e.target.id !== 'addForm') return;
   e.preventDefault();
+  if (!unlocked()) { renderLock(); return; }
   const f = e.target.elements;
   const name = f.name.value.trim();
   let url = f.url.value.trim();
@@ -211,12 +239,13 @@ document.addEventListener('submit', (e) => {
 const closeStory = () => { $('#reader').hidden = true; document.body.style.overflow = ''; };
 
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('[data-open],[data-src],[data-page],[data-close],[data-share],[data-more],[data-explore],[data-sources],[data-close-sources],[data-color],#sources,#refreshBtn');
+  const t = e.target.closest('[data-open],[data-src],[data-page],[data-close],[data-share],[data-more],[data-explore],[data-sources],[data-close-sources],[data-lock],[data-color],#sources,#refreshBtn');
   if (!t) return;
   if (t.id === 'sources') { if (e.target === t) closeSources(); return; }
   if (t.dataset.color) { pickColor = t.dataset.color; t.parentNode.querySelectorAll('[data-color]').forEach((b) => b.setAttribute('aria-checked', b === t)); return; }
   if ('sources' in t.dataset) { openSources(); return; }
   if ('closeSources' in t.dataset) { closeSources(); return; }
+  if ('lock' in t.dataset) { try { localStorage.removeItem('sl-unlock'); } catch {} closeSources(); render(); return; }
   if ('more' in t.dataset) { state.limit += PAGE; const y = window.scrollY; render(); window.scrollTo(0, y); }
   else if (t.dataset.open) openStory(t.dataset.open);
   else if (t.dataset.src) { state.source = t.dataset.src; state.limit = PAGE; render(); window.scrollTo(0, 0); }
@@ -247,7 +276,7 @@ async function load() {
   } catch {}
   if (state.source !== 'all' && !state.sources.some((s) => s.id === state.source)) state.source = 'all';
   render();
-  if (!$('#sources').hidden) renderSources();
+  if (!$('#sources').hidden && unlocked()) renderSources();
   if (!state.articles.length) setTimeout(load, 5000);
 }
 load();

@@ -120,3 +120,5 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .srcs a{font-size:13px;color:var(--muted);text-decoration:none;padding:4px 0}
 .srcs a.del{color:#ff6b6b}
 .srcs .pend{opacity:.7}
+.err{color:#ff6b6b;font-size:13px;margin:-4px 0 12px}
+.lock{display:block;margin:18px auto 0;font-size:13px;color:var(--muted);padding:8px}
