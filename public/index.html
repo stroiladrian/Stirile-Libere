@@ -20,17 +20,18 @@
 <div id="app">
   <header class="top">
     <div class="brand"><svg class="logo-mark" viewBox="0 0 200 200" width="30" height="30" role="img" aria-label="Știrile Libere"><rect width="200" height="200" fill="#E5484D"/><polygon points="30,116 172,42 110,166" fill="#fff"/><polygon points="110,166 96,116 172,42" fill="#FFD3D0"/></svg> Știrile <b>Libere</b>
-      <button id="refreshBtn" class="icon-btn" aria-label="Actualizează">⟳</button>
+      <button id="menuBtn" class="icon-btn menu-btn" aria-label="Meniu" aria-haspopup="true" aria-expanded="false" aria-controls="menu"><svg class="burger" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span class="busy-ic">⟳</span></button>
+      <div id="menu" class="menu" role="menu" hidden>
+        <button role="menuitem" data-refresh><span class="mi">⟳</span>Actualizează</button>
+        <button role="menuitem" data-page="home"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"/></svg>Acasă</button>
+        <button role="menuitem" data-page="explore"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Setări</button>
+      </div>
     </div>
     <nav id="tabs" class="tabs" aria-label="Surse"></nav>
   </header>
 
   <main id="view"></main>
 
-  <nav class="bottom" aria-label="Navigare">
-    <button data-page="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"/></svg><span>Acasă</span></button>
-    <button data-page="explore"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><span>Explorează</span></button>
-  </nav>
 </div>
 
 <div id="reader" class="reader" hidden></div>

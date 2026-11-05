@@ -8,7 +8,7 @@ npm install
 npm start        # http://localhost:4321 (alt port: PORT=5000 npm start)
 ```
 - Prima pornire descarcă știrile automat; apoi se actualizează zilnic la 07:00 și 13:00 (ora României) cât timp serverul rulează.
-- Buton ⟳ din aplicație = actualizare manuală. `npm run fetch` = doar descărcare.
+- Meniul ☰ (dreapta sus): Actualizează, Acasă, Setări. Actualizează = reîncărcare manuală. `npm run fetch` = doar descărcare.
 - Sursele stau în folderul `feeds/` (un fișier `.json` pe sursă). Vezi „Surse” mai jos.
 - Salvatele se țin în browser (localStorage).
 
@@ -22,7 +22,7 @@ Pune folderul pe un server (Render, Railway, Fly.io, VPS) și deschide adresa pe
 Datele stau în `public/data/` (se commit-uiesc automat).
 
 ## Surse (adaugă / editează / șterge)
-- În aplicație: **Explorează → „+ Adaugă sursă”**. Scrii numele și adresa site-ului (sau a feed-ului RSS), alegi o culoare, apeși **Continuă pe GitHub** → **Commit changes**. După 1–3 minute sursa apare în aplicație.
+- În aplicație: **☰ → Setări → „+ Adaugă sursă”** (cu parolă). Scrii numele și adresa site-ului (sau a feed-ului RSS), alegi o culoare, apeși **Continuă pe GitHub** → **Commit changes**. După 1–3 minute sursa apare în aplicație.
 - Feed-ul se găsește singur din adresa site-ului (RSS sau Atom). Dacă nu se găsește, sursa apare în listă cu „Nu am găsit feed-ul – verifică adresa”.
 - Pentru sursele noi, dacă feed-ul are doar un rezumat, articolul complet se descarcă de pe site.
 - Editarea și ștergerea: din aceeași listă (linkurile duc la fișierul de pe GitHub).

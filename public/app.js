@@ -78,7 +78,7 @@ function mixFeed(articles) {
 
 function renderHome() {
   const list = state.source === 'all' ? mixFeed(state.articles) : state.articles.filter((a) => a.source === state.source);
-  if (!list.length) return `<div class="empty">Nu sunt încă știri. Se descarcă acum… apasă ⟳ dacă durează.</div>`;
+  if (!list.length) return `<div class="empty">Nu sunt încă știri. Se descarcă acum… deschide meniul ☰ → Actualizează dacă durează.</div>`;
   const [hero, ...rest] = list;
   const stamp = state.updatedAt ? `Actualizat ${ago(state.updatedAt)}` : '';
   return `<button class="hero" data-open="${esc(hero.id)}" ${bg(hero)}>
@@ -108,7 +108,7 @@ function render(keepFocus) {
   renderTabs();
   const v = $('#view');
   v.innerHTML = state.page === 'home' ? renderHome() : renderExplore();
-  document.querySelectorAll('.bottom button').forEach((b) => b.classList.toggle('on', b.dataset.page === state.page));
+  document.querySelectorAll('#menu [data-page]').forEach((b) => b.classList.toggle('on', b.dataset.page === state.page));
   if (keepFocus) { const i = $('#q'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
 }
 
@@ -239,7 +239,10 @@ document.addEventListener('submit', async (e) => {
 const closeStory = () => { $('#reader').hidden = true; document.body.style.overflow = ''; };
 
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('[data-open],[data-src],[data-page],[data-close],[data-share],[data-more],[data-explore],[data-sources],[data-close-sources],[data-lock],[data-color],#sources,#refreshBtn');
+  const t = e.target.closest('[data-open],[data-src],[data-page],[data-close],[data-share],[data-more],[data-explore],[data-sources],[data-close-sources],[data-lock],[data-color],[data-refresh],#sources,#menuBtn');
+  // meniul (hamburger): se deschide/închide din buton și se închide la orice alt clic
+  if (t && t.id === 'menuBtn') { toggleMenu(); return; }
+  toggleMenu(false);
   if (!t) return;
   if (t.id === 'sources') { if (e.target === t) closeSources(); return; }
   if (t.dataset.color) { pickColor = t.dataset.color; t.parentNode.querySelectorAll('[data-color]').forEach((b) => b.setAttribute('aria-checked', b === t)); return; }
@@ -256,16 +259,24 @@ document.addEventListener('click', async (e) => {
     const a = byId(t.dataset.share);
     if (navigator.share) navigator.share({ title: a.title, url: a.link }).catch(() => {});
     else navigator.clipboard?.writeText(a.link).then(() => { t.style.opacity = .5; setTimeout(() => (t.style.opacity = ''), 600); });
-  } else if (t.id === 'refreshBtn') {
-    t.classList.add('spin');
+  } else if ('refresh' in t.dataset) {
+    const btn = $('#menuBtn');
+    btn.classList.add('busy');
     Object.keys(contentCache).forEach((k) => delete contentCache[k]);
     await fetch('api/refresh', { method: 'POST' }).catch(() => {});
     await load();
-    t.classList.remove('spin');
+    btn.classList.remove('busy');
   }
 });
 document.addEventListener('input', (e) => { if (e.target.id === 'q') { state.q = e.target.value; state.limit = PAGE; render(true); } });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeStory(); closeSources(); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { toggleMenu(false); closeStory(); closeSources(); } });
+function toggleMenu(open) {
+  const m = $('#menu'), b = $('#menuBtn');
+  if (!m) return;
+  open = open ?? m.hidden;
+  m.hidden = !open;
+  b.setAttribute('aria-expanded', open);
+}
 // la revenirea în aplicație (ex. după GitHub) reîncarcă știrile și sursele
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(); });
 

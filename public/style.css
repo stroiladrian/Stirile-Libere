@@ -2,7 +2,7 @@
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
 html,body{background:#000;font-family:var(--sans);color:var(--ink)}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
-#app{max-width:560px;margin:0 auto;min-height:100vh;background:var(--bg);position:relative;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+#app{max-width:560px;margin:0 auto;min-height:100vh;background:var(--bg);position:relative;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
 
 .top{position:sticky;top:0;z-index:20;background:var(--bg)}
 .brand{display:flex;align-items:center;gap:8px;padding:14px 16px 6px;font-family:var(--serif);font-size:22px;position:relative}
@@ -47,12 +47,19 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .tile span{position:absolute;z-index:1;left:12px;right:12px;bottom:12px;font:700 17px/1.2 var(--serif)}
 .tile small{display:block;font:12px var(--sans);opacity:.8;margin-top:3px}
 
-/* bottom nav */
-.bottom{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:560px;background:#000;border-top:1px solid #222;display:flex;justify-content:space-around;padding:8px 0 calc(8px + env(safe-area-inset-bottom));z-index:30}
-.bottom button{display:flex;flex-direction:column;align-items:center;gap:3px;color:#8a8a8a;font-size:14px;font-weight:600;flex:1}
-.bottom svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round}
-.bottom button.on{color:#fff}
-.bottom button.on svg{stroke:var(--red)}
+/* meniu hamburger (dreapta sus) */
+.menu-btn{display:flex;align-items:center;justify-content:center;width:44px;height:40px;padding:0}
+.menu-btn .burger{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.menu-btn .busy-ic{display:none;font-size:30px;line-height:1}
+.menu-btn.busy .burger{display:none}
+.menu-btn.busy .busy-ic{display:block;animation:spin 1s linear infinite}
+.menu{position:absolute;top:calc(100% - 2px);right:12px;z-index:40;min-width:210px;background:#1c1c1c;border:1px solid var(--line);border-radius:12px;padding:6px;box-shadow:0 12px 32px rgba(0,0,0,.6);font-family:var(--sans)}
+.menu[hidden]{display:none}
+.menu button{display:flex;align-items:center;gap:12px;width:100%;padding:12px;border-radius:8px;font-size:16px;font-weight:600;color:var(--ink);text-align:left}
+.menu button:active{background:#2a2a2a}
+.menu svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.menu .mi{width:22px;text-align:center;font-size:22px;line-height:1;flex:none}
+.menu button.on{color:var(--red)}
 
 /* reader */
 .reader{position:fixed;inset:0;z-index:50;background:#000;display:flex;justify-content:center}
