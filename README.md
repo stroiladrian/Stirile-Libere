@@ -22,11 +22,13 @@ Pune folderul pe un server (Render, Railway, Fly.io, VPS) și deschide adresa pe
 Datele stau în `public/data/` (se commit-uiesc automat).
 
 ## Surse (adaugă / editează / șterge)
-- În aplicație: **☰ → Setări → „+ Adaugă sursă”** (cu parolă). Scrii numele și adresa site-ului (sau a feed-ului RSS), alegi o culoare, apeși **Continuă pe GitHub** → **Commit changes**. După 1–3 minute sursa apare în aplicație.
-- Feed-ul se găsește singur din adresa site-ului (RSS sau Atom). Dacă nu se găsește, sursa apare în listă cu „Nu am găsit feed-ul – verifică adresa”.
+- În aplicație: **☰ → Setări → „+ Adaugă sursă”** (cu parolă). Scrii numele și adresa site-ului (sau a feed-ului RSS), alegi o culoare, apeși **Continuă pe GitHub**.
+- Se deschide un *issue* pe GitHub, gata completat: apeși **Create** (telefon) / **Submit new issue** (PC). Robotul (`.github/workflows/sources.yml` + `scripts/apply-source.js`) creează fișierul în `feeds/`, pornește actualizarea știrilor și închide issue-ul cu un mesaj. După 1–3 minute sursa apare în aplicație.
+- Robotul ascultă **doar** de issue-urile deschise de proprietarul repo-ului; restul sunt ignorate.
+- Editează / Șterge: din aceeași listă, în aplicație (tot printr-un issue).
+- Feed-ul se găsește singur din adresa site-ului (RSS sau Atom). Dacă nu se găsește, sursa apare cu „Nu am găsit feed-ul – verifică adresa”.
 - Pentru sursele noi, dacă feed-ul are doar un rezumat, articolul complet se descarcă de pe site.
-- Editarea și ștergerea: din aceeași listă (linkurile duc la fișierul de pe GitHub).
-- Format fișier `feeds/<id>.json`: `{ "name": "...", "url": "https://...", "color": "#RRGGBB" }` (opțional: `feed`, `order`, `extract: false`, `body`, `skip`, `fallbackFeed`).
+- Format fișier `feeds/<id>.json`: `{ "name": "...", "url": "https://...", "color": "#RRGGBB" }` (opțional: `feed`, `order`, `extract: false`, `body`, `skip`, `fallbackFeed`). Se poate edita și direct pe GitHub.
 
 ## Revenire la versiunea stabilă (dinainte de surse)
 Versiunea dinainte de această schimbare are tag-ul `stable-v1`. Pentru revenire (păstrează știrile descărcate):

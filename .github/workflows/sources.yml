@@ -1,0 +1,61 @@
+name: Surse din aplicatie
+
+# Aplicația (Setări → Surse) deschide un „issue” cu cererea. Doar issue-urile deschise de proprietarul
+# repo-ului sunt aplicate; restul sunt ignorate. Apoi pornește actualizarea știrilor și închide issue-ul.
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: sources
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.event.issue.user.login == github.repository_owner && contains(github.event.issue.body, '"action"')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NUM: ${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Aplică cererea
+        id: apply
+        run: node scripts/apply-source.js
+
+      - name: Salvează în repo
+        if: steps.apply.outputs.ok == 'true'
+        env:
+          MSG: ${{ steps.apply.outputs.msg }}
+        run: |
+          git config user.name "stirile-libere-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add -A feeds
+          if git diff --cached --quiet; then
+            echo "Nicio schimbare."
+          else
+            git commit -m "$MSG"
+            git pull --rebase -q origin main
+            git push
+          fi
+
+      # un push făcut de robot nu pornește alte workflow-uri, așa că pornim explicit actualizarea știrilor
+      - name: Pornește actualizarea știrilor
+        if: steps.apply.outputs.ok == 'true'
+        run: gh workflow run update.yml --ref main -R "$GITHUB_REPOSITORY"
+
+      - name: Răspunde și închide cererea
+        if: always()
+        run: |
+          [ -f .reply.txt ] || echo "⚠️ Ceva n-a mers. Detalii în tab-ul Actions." > .reply.txt
+          gh issue close "$NUM" -R "$GITHUB_REPOSITORY" --comment "$(cat .reply.txt)"

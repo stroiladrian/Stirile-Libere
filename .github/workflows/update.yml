@@ -63,6 +63,7 @@ jobs:
             git config user.email "bot@users.noreply.github.com"
             git add public/data
             git commit -m "Știri noi $(TZ=Europe/Bucharest date '+%Y-%m-%d %H:%M')"
+            git pull --rebase -q origin main   # dacă între timp s-a adăugat o sursă din aplicație
             git push
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else

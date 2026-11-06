@@ -150,7 +150,16 @@ async function openStory(id) {
   } catch { $('#prose .loading')?.remove(); }
 }
 // ---------- Surse: adaugă / editează / șterge (prin GitHub, fără conturi sau chei în aplicație) ----------
-const gh = (kind, file) => `https://github.com/${REPO}/${kind}/${BRANCH}/feeds/${file}.json`;
+// Aplicația deschide un „issue” pe GitHub, gata completat. Robotul (workflow-ul „Surse din aplicatie”) îl aplică
+// doar dacă e deschis de proprietarul repo-ului, apoi publică știrile și închide issue-ul.
+const TITLES = { add: 'Adaugă sursa', edit: 'Editează sursa', delete: 'Șterge sursa' };
+function sendRequest(req) {
+  const body = `Cerere trimisă din aplicația Știrile Libere. Apasă **Create** / **Submit new issue**, fără să modifici blocul de mai jos.\n\n\`\`\`json\n${JSON.stringify(req)}\n\`\`\`\n`;
+  const link = `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(`${TITLES[req.action]}: ${req.name || req.id}`)}&body=${encodeURIComponent(body)}`;
+  window.open(link, '_blank', 'noopener');
+  store.set([...store.get().filter((p) => p.id !== req.id), { id: req.id, name: req.name, color: req.color || colorOf(req.id), action: req.action, at: Date.now() }]);
+}
+let editing = null; // id-ul sursei editate în formular (null = sursă nouă)
 const slug = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
 const store = {
   get() { try { return JSON.parse(localStorage.getItem('sl-pending') || '[]'); } catch { return []; } },
@@ -179,29 +188,40 @@ function renderLock(err) {
 
 function renderSources() {
   const known = new Set(state.sources.map((s) => s.id));
-  const pending = store.get().filter((p) => !known.has(p.id) && Date.now() - p.at < 864e5);
+  // cereri trimise: „adaugă” până apare sursa, „șterge” până dispare, „editează” 10 minute
+  const pending = store.get().filter((p) => (p.action === 'add' ? !known.has(p.id) : p.action === 'delete' ? known.has(p.id) : Date.now() - p.at < 6e5) && Date.now() - p.at < 864e5);
   store.set(pending);
+  const pend = Object.fromEntries(pending.map((p) => [p.id, p]));
+  const cur = editing && state.sources.find((s) => s.id === editing);
+  if (!cur) editing = null;
   const used = new Set(state.sources.map((s) => colorOf(s.id)));
-  pickColor ||= PALETTE.find((c) => !used.has(c)) || PALETTE[0];
-  const rows = state.sources.map((s) => `<li>
+  pickColor ||= cur ? colorOf(cur.id) : PALETTE.find((c) => !used.has(c)) || PALETTE[0];
+  const sub = (s) => {
+    const p = pend[s.id];
+    if (p && p.action === 'delete') return '<small>Se șterge… (1–3 min)</small>';
+    if (p && p.action === 'edit') return '<small>Se actualizează… (1–3 min)</small>';
+    if (s.ok === false) return '<small class="warn">Nu am găsit feed-ul – verifică adresa</small>';
+    return `<small>${esc((s.url || '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</small>`;
+  };
+  const rows = state.sources.map((s) => `<li class="${pend[s.id] ? 'pend' : ''}">
       <i class="dot" style="background:${colorOf(s.id)}"></i>
-      <span class="nm">${esc(s.name)}${s.ok === false ? '<small class="warn">Nu am găsit feed-ul – verifică adresa</small>' : `<small>${esc((s.url || '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</small>`}</span>
-      <a href="${gh('edit', s.id)}" target="_blank" rel="noopener">Editează</a>
-      <a href="${gh('delete', s.id)}" target="_blank" rel="noopener" class="del">Șterge</a></li>`).join('')
-    + pending.map((p) => `<li class="pend"><i class="dot" style="background:${esc(p.color)}"></i><span class="nm">${esc(p.name)}<small>Se adaugă… apare după publicare (1–3 min)</small></span></li>`).join('');
+      <span class="nm">${esc(s.name)}${sub(s)}</span>
+      <button data-edit="${esc(s.id)}">Editează</button>
+      <button data-del="${esc(s.id)}" class="del">Șterge</button></li>`).join('')
+    + pending.filter((p) => p.action === 'add').map((p) => `<li class="pend"><i class="dot" style="background:${esc(p.color)}"></i><span class="nm">${esc(p.name)}<small>Se adaugă… apare după publicare (1–3 min)</small></span></li>`).join('');
   $('#sources').innerHTML = `<div class="panel" role="dialog" aria-label="Surse">
     <div class="ph"><h2>Surse</h2><button class="x" data-close-sources aria-label="Închide">×</button></div>
     <form id="addForm" autocomplete="off">
-      <h3>Adaugă sursă</h3>
-      <label>Nume<input name="name" required maxlength="40" placeholder="ex. G4Media"></label>
-      <label>Adresa site-ului sau a feed-ului RSS<input name="url" required inputmode="url" autocapitalize="off" spellcheck="false" placeholder="g4media.ro sau https://…/feed/"></label>
+      <h3>${cur ? `Editează sursa <button type="button" class="cancel" data-cancel-edit>Renunță</button>` : 'Adaugă sursă'}</h3>
+      <label>Nume<input name="name" required maxlength="40" placeholder="ex. G4Media" value="${cur ? esc(cur.name) : ''}"></label>
+      <label>Adresa site-ului sau a feed-ului RSS<input name="url" required inputmode="url" autocapitalize="off" spellcheck="false" placeholder="g4media.ro sau https://…/feed/" value="${cur ? esc(cur.url || '') : ''}"></label>
       <div class="sw" role="radiogroup" aria-label="Culoare">${PALETTE.map((c) => `<button type="button" role="radio" aria-checked="${c === pickColor}" aria-label="Culoare ${c}" data-color="${c}" style="background:${c}"></button>`).join('')}</div>
       <button type="submit" class="primary">Continuă pe GitHub</button>
-      <p class="hint">Se deschide GitHub cu sursa gata completată: apasă <b>Commit changes</b>. Feed-ul se găsește singur din adresa site-ului, iar știrile apar în aplicație după 1–3 minute.</p>
+      <p class="hint">Se deschide GitHub cu cererea gata completată: apasă <b>Create</b> (pe telefon) sau <b>Submit new issue</b>. Feed-ul se găsește singur din adresa site-ului, iar știrile apar în aplicație după 1–3 minute.</p>
     </form>
     <h3>Sursele tale</h3>
     <ul class="srcs">${rows}</ul>
-    <p class="hint">Editarea și ștergerea se fac tot pe GitHub (Commit changes). O sursă ștearsă dispare cu tot cu știrile ei.</p>
+    <p class="hint">Editarea și ștergerea trimit tot o cerere pe GitHub (Create / Submit new issue). O sursă ștearsă dispare cu tot cu știrile ei.</p>
     <button class="lock" data-lock>🔒 Blochează pe acest dispozitiv</button>
   </div>`;
 }
@@ -224,14 +244,16 @@ document.addEventListener('submit', async (e) => {
   let url = f.url.value.trim();
   if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
   try { url = new URL(url).toString(); } catch { f.url.setCustomValidity('Adresă invalidă'); f.url.reportValidity(); f.url.setCustomValidity(''); return; }
-  let base = slug(name) || slug(new URL(url).hostname.replace(/^www\./, '')) || 'sursa';
-  const ids = new Set([...state.sources.map((s) => s.id), ...store.get().map((p) => p.id)]);
-  let id = base, n = 2;
-  while (ids.has(id)) id = `${base}-${n++}`;
-  const value = JSON.stringify({ name, url, color: pickColor }, null, 2) + '\n';
-  const link = `https://github.com/${REPO}/new/${BRANCH}?filename=${encodeURIComponent(`feeds/${id}.json`)}&value=${encodeURIComponent(value)}&message=${encodeURIComponent(`Sursă nouă: ${name}`)}`;
-  window.open(link, '_blank', 'noopener');
-  store.set([...store.get(), { id, name, color: pickColor, at: Date.now() }]);
+  if (editing) {
+    sendRequest({ action: 'edit', id: editing, name, url, color: pickColor });
+  } else {
+    const base = slug(name) || slug(new URL(url).hostname.replace(/^www\./, '')) || 'sursa';
+    const ids = new Set([...state.sources.map((s) => s.id), ...store.get().map((p) => p.id)]);
+    let id = base, n = 2;
+    while (ids.has(id)) id = `${base}-${n++}`;
+    sendRequest({ action: 'add', id, name, url, color: pickColor });
+  }
+  editing = null;
   pickColor = null;
   renderSources();
 });
@@ -239,12 +261,22 @@ document.addEventListener('submit', async (e) => {
 const closeStory = () => { $('#reader').hidden = true; document.body.style.overflow = ''; };
 
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('[data-open],[data-src],[data-page],[data-close],[data-share],[data-more],[data-explore],[data-sources],[data-close-sources],[data-lock],[data-color],[data-refresh],#sources,#menuBtn');
+  const t = e.target.closest('[data-open],[data-src],[data-page],[data-close],[data-share],[data-more],[data-explore],[data-sources],[data-close-sources],[data-lock],[data-color],[data-refresh],[data-edit],[data-del],[data-cancel-edit],#sources,#menuBtn');
   // meniul (hamburger): se deschide/închide din buton și se închide la orice alt clic
   if (t && t.id === 'menuBtn') { toggleMenu(); return; }
   toggleMenu(false);
   if (!t) return;
   if (t.id === 'sources') { if (e.target === t) closeSources(); return; }
+  if (t.dataset.edit) { editing = t.dataset.edit; pickColor = null; renderSources(); $('#sources .panel').scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  if ('cancelEdit' in t.dataset) { editing = null; pickColor = null; renderSources(); return; }
+  if (t.dataset.del) {
+    const s = state.sources.find((x) => x.id === t.dataset.del);
+    if (!s || !unlocked()) return;
+    if (t.dataset.sure !== '1') { t.dataset.sure = '1'; t.textContent = 'Sigur?'; setTimeout(() => { t.dataset.sure = ''; t.textContent = 'Șterge'; }, 4000); return; }
+    sendRequest({ action: 'delete', id: s.id, name: s.name });
+    renderSources();
+    return;
+  }
   if (t.dataset.color) { pickColor = t.dataset.color; t.parentNode.querySelectorAll('[data-color]').forEach((b) => b.setAttribute('aria-checked', b === t)); return; }
   if ('sources' in t.dataset) { openSources(); return; }
   if ('closeSources' in t.dataset) { closeSources(); return; }
